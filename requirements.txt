@@ -1,0 +1,11 @@
+langchain>=0.2.17
+langchain-community>=0.2.17
+langchain-openai>=0.1.25
+faiss-cpu>=1.8.0
+ragas>=0.1.14
+pandas>=2.2.2
+pydantic>=2.8.2
+PyYAML>=6.0.2
+tqdm>=4.66.4
+python-dotenv>=1.0.1
+datasets>=2.20.0

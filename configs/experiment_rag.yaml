@@ -1,0 +1,43 @@
+project_name: rag_hallucination_eval
+prompt_version: rag_siliconflow_v1
+random_seed: 42
+
+llm:
+  provider: openai_compatible
+  model_name: deepseek-ai/DeepSeek-V3
+  temperature: 0.0
+  max_tokens: 800
+  api_key_env: SILICONFLOW_API_KEY
+  base_url: https://api.siliconflow.cn/v1
+
+embedding:
+  provider: openai_compatible
+  model_name: BAAI/bge-large-zh-v1.5
+  api_key_env: SILICONFLOW_API_KEY
+  base_url: https://api.siliconflow.cn/v1
+
+chunking:
+  chunk_size: 700
+  chunk_overlap: 120
+
+evaluation:
+  llm_max_tokens: 4096
+
+retrieval:
+  top_k: 4
+
+dataset:
+  course_name: example_course
+  dataset_version: v1
+  qa_dataset_path: data/eval/qa_dataset.csv
+  raw_glob: "*.md"
+
+paths:
+  raw_dir: data/raw
+  processed_dir: data/processed
+  eval_dir: data/eval
+  vector_store_dir: data/vector_store
+  results_dir: results
+  runs_dir: results/runs
+  reports_dir: results/reports
+  figures_dir: results/figures

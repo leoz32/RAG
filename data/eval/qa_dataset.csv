@@ -1,0 +1,4 @@
+question_id,question,ground_truth,question_type
+q1,什么是监督学习？,监督学习是从带标签的数据中学习输入到输出映射关系的方法。,factoid
+q2,如何缓解过拟合？,可以通过正则化、交叉验证、增加训练数据和早停来缓解过拟合。,reasoning
+q3,教学资料是否说明了强化学习的定义？,资料中没有说明强化学习的定义，因此应回答未知。,adversarial

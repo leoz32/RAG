@@ -1,0 +1,8 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+results/runs/
+data/processed/
+data/vector_store/
+.DS_Store
