@@ -2,49 +2,19 @@
 
 面向高教教学问答场景的研究型 RAG 幻觉评估平台。用于比较 `Non-RAG baseline` 与 `RAG` 两条生成链在同一批教学问题上的幻觉差异。
 
-## 研究定位
+`教材准备 -> 建库 -> 检索 -> baseline / rag 生成 -> Ragas 评测`
 
-- `baseline`：只把问题发给 LLM，不注入任何检索上下文。
-- `rag`：先从本地 FAISS 知识库检索相关教学资料，再把上下文注入 Prompt。
-- 评测目标：比较两条链在 `faithfulness`、`answer_relevance` 等指标上的表现差异。
+## 当前主线
 
-`baseline` 在生成阶段绝不能调用 retriever。这是实验对照组的基本约束。  
-`baseline` 在评测阶段允许补入 `evaluation_contexts`，但该字段只用于评测事实对照，不参与答案生成。
+当前推荐实验路径是：
 
-## 当前最小闭环
+- 语料：`OpenStax U.S. History` 清洗后的 Markdown
+- 题集：只保留 `source_doc = OpenStax` 的 QA 子集
+- 检索：`bge-m3` + FAISS dense + BM25 + `hybrid_rrf`
+- 生成：`baseline` 与 `rag` 两条链并行输出
+- 评测：Ragas，支持断点续跑
 
-首版默认：
-
-- Python 3.11+
-- 默认使用 SiliconFlow 的 OpenAI-compatible 接口
-- 原始教学资料只接收 `.md`
-- 本地 CLI + YAML 配置
-- 单机运行
-
-默认配置 [base.yaml](/Users/admin/RAG/configs/base.yaml) 当前为：
-
-- LLM: SiliconFlow 上的 `deepseek-ai/DeepSeek-V3`
-- LLM `base_url`: `https://api.siliconflow.cn/v1`
-- Embedding: SiliconFlow 上的 `BAAI/bge-large-zh-v1.5`
-- Embedding `base_url`: `https://api.siliconflow.cn/v1`
-- API Key: `SILICONFLOW_API_KEY`
-
-也支持保留本地 embedding，仅把 DeepSeek 作为 LLM。当前仓库附带 [deepseek_local.yaml](/Users/admin/RAG/configs/deepseek_local.yaml)：
-
-- LLM: `deepseek-chat`
-- `base_url`: `https://api.deepseek.com`
-- Embedding: 本地可复现 `local_hash`
-
-这样可以在没有外部 embedding 服务时跑通最小实验闭环。
-
-嵌入模型也支持独立配置为 OpenAI-compatible 接口，不必和 LLM 共用同一家服务。当前仓库附带 [deepseek_siliconflow_embedding.yaml](/Users/admin/RAG/configs/deepseek_siliconflow_embedding.yaml)：
-
-- LLM: `deepseek-chat`
-- LLM `base_url`: `https://api.deepseek.com`
-- Embedding: `BAAI/bge-large-zh-v1.5`
-- Embedding `base_url`: `https://api.siliconflow.cn/v1`
-
-这适合 LLM 继续走 DeepSeek、嵌入改走硅基流动的场景。
+项目里仍保留早期的 `openstax_american_yawp` 适配器和纯 dense 路径，但它们不再是默认推荐方案。
 
 ## 目录
 
@@ -52,14 +22,19 @@
 configs/
 data/
   raw/
-  processed/
   eval/
+  processed/
   vector_store/
 results/
   runs/
-src/
 scripts/
+src/
 ```
+
+说明：
+
+- `data/raw/`、`data/eval/` 下的抓取教材和实验题集默认只在本地保留，不纳入版本控制。
+- `data/processed/`、`data/vector_store/`、`results/runs/` 都是运行产物，不提交。
 
 ## 安装
 
@@ -70,7 +45,7 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-在 `.env` 中填入：
+常用环境变量：
 
 ```bash
 SILICONFLOW_API_KEY=...
@@ -78,156 +53,119 @@ DEEPSEEK_API_KEY=...
 OPENAI_API_KEY=...
 ```
 
-如果你想显式声明默认的 SiliconFlow 方案，配置示例：
+## 当前关键配置
 
-```yaml
-llm:
-  provider: openai_compatible
-  model_name: deepseek-ai/DeepSeek-V3
-  api_key_env: SILICONFLOW_API_KEY
-  base_url: https://api.siliconflow.cn/v1
+推荐配置：
 
-embedding:
-  provider: openai_compatible
-  model_name: BAAI/bge-large-zh-v1.5
-  api_key_env: SILICONFLOW_API_KEY
-  base_url: https://api.siliconflow.cn/v1
+- `configs/openstax_us_history_clean_openstax_only.yaml`
 
-evaluation:
-  llm_max_tokens: 4096
-```
+它使用：
 
-其中：
+- LLM: `deepseek-chat`
+- Embedding: `BAAI/bge-m3`
+- Dense retrieval + BM25 hybrid RRF
+- OpenStax-only QA 子集
 
-- `llm.max_tokens` 只控制生成阶段回答长度
-- `evaluation.llm_max_tokens` 只控制 Ragas 评测阶段的结构化判分输出长度
-- 如果评测日志里出现 `max_tokens length limit`，优先继续增大 `evaluation.llm_max_tokens`
+辅助配置：
 
-接口调用范式与 OpenAI embeddings 兼容，请求会命中 `/embeddings`，等价于：
-
-```python
-import requests
-
-url = "https://api.siliconflow.cn/v1/embeddings"
-payload = {
-    "model": "BAAI/bge-large-zh-v1.5",
-    "input": "Silicon flow embedding online: fast, affordable, and high-quality embedding services.",
-}
-headers = {
-    "Authorization": "Bearer <token>",
-    "Content-Type": "application/json",
-}
-response = requests.post(url, json=payload, headers=headers)
-print(response.text)
-```
+- `configs/openstax_us_history_clean.yaml`
+  - 用清洗后的 OpenStax 原文，但题集仍指向完整混合 QA
+- `configs/openstax_american_yawp_local.yaml`
+  - 面向上游 HF 数据集适配后的本地 smoke test 路线
 
 ## 数据准备
 
-1. 将课程资料整理为 Markdown 文件，放入 `data/raw/`
-2. 准备题集 `data/eval/qa_dataset.csv`
+### 1. 从 Hugging Face 适配 QA 数据
 
-题集最小字段：
-
-```text
-question_id,question,ground_truth,question_type
+```bash
+python scripts/datasets/openstax_american_yawp/prepare_dataset.py
 ```
 
-推荐 `question_type`：
+该脚本会把 `ambrosfitz/openstax_american_yawp` 映射成项目内部格式。注意：
 
-- `factoid`
-- `reasoning`
-- `adversarial`
+- 上游数据集是 QA 数据，不是教材原文语料
+- `data/raw/openstax_american_yawp/**/*.md` 是派生 pseudo-corpus，只适合 smoke test，不适合作为正式实验的检索语料
+
+### 2. 抓取并清洗 OpenStax U.S. History 原文
+
+先抓取：
+
+```bash
+python scripts/fetch_openstax_us_history.py \
+  --i-have-permission \
+  --out-dir data/raw/openstax_us_history_original_v3
+```
+
+再清洗：
+
+```bash
+python scripts/clean_openstax_us_history.py \
+  --input-dir data/raw/openstax_us_history_original_v3 \
+  --output-dir data/raw/openstax_us_history_clean_v1
+```
+
+### 3. 按 `source_doc` 拆分题集
+
+```bash
+python scripts/split_qa_dataset_by_source_doc.py \
+  --input data/eval/openstax_american_yawp_qa_dataset.csv \
+  --output-dir data/eval/split_by_source_doc
+```
+
+会生成：
+
+- `data/eval/split_by_source_doc/openstax_qa_dataset.csv`
+- `data/eval/split_by_source_doc/american_yawp_qa_dataset.csv`
 
 ## 运行
 
-默认运行方案使用 [base.yaml](/Users/admin/RAG/configs/base.yaml)，即 SiliconFlow 的 `deepseek-ai/DeepSeek-V3` + `BAAI/bge-large-zh-v1.5`。
-
-### Stage 1: 配置检查
+### 1. 建索引
 
 ```bash
-python -m src.main --config configs/base.yaml show-config
+python scripts/build_index.py \
+  --config configs/openstax_us_history_clean_openstax_only.yaml \
+  --experiment-id exp_openstax_only_bgem3
 ```
 
-验收条件：
+### 2. 小样本生成
 
-- 能加载 `configs/base.yaml`
-- 能自动创建 `results/runs/{experiment_id}/`
-- 能生成 `config_snapshot.yaml`
-
-### Stage 2: 建索引与生成
+先跑 100 题，而不是直接跑全量：
 
 ```bash
-python scripts/build_index.py --config configs/base.yaml
-python scripts/run_generation.py --config configs/base.yaml --experiment-id <experiment_id>
+python scripts/run_generation.py \
+  --config configs/openstax_us_history_clean_openstax_only.yaml \
+  --experiment-id exp_openstax_only_bgem3 \
+  --limit 100
 ```
 
-验收条件：
-
-- `data/processed/chunks.jsonl` 已生成
-- `data/vector_store/faiss_index/` 已生成
-- `results/runs/<experiment_id>/generation_results.csv` 已生成
-- `generation_results.csv` 同时包含 `baseline` 与 `rag`
-
-### Stage 3: 评测与分析
+### 3. 评测
 
 ```bash
-python scripts/run_evaluation.py --config configs/base.yaml --experiment-id <experiment_id>
+python scripts/run_evaluation.py \
+  --config configs/openstax_us_history_clean_openstax_only.yaml \
+  --experiment-id exp_openstax_only_bgem3
 ```
 
-验收条件：
+## 当前实现重点
 
-- `baseline_eval_results.csv` 已生成
-- `rag_eval_results.csv` 已生成
-- `metrics_summary.json` 已生成
-- `analysis_report.json` 已生成
+- 数据集隔离的 `chunks` / `vector_store` 目录
+- 索引 metadata 校验，避免不同实验串库
+- embedding cache metadata 校验，避免更换 provider / model 后误复用旧缓存
+- SiliconFlow embedding 超长输入 fallback
+- `sentence_window` 分块 + 词数硬上限
+- `run_generation --limit`
+- Ragas 断点续跑
+- BM25 + dense `hybrid_rrf`
 
-### Stage 4: 一键完整实验
+## 注意事项
 
-```bash
-python scripts/run_full_experiment.py --config configs/base.yaml
-```
+- `baseline` 在生成阶段不能调用 retriever。
+- `evaluation_contexts` 只用于评测，不参与 baseline 生成。
+- 调整 `top_k`、`bm25_top_k`、`rrf_k` 不应要求重建索引；重建索引只在语料、embedding、chunking 变化时需要。
+- 正式全量实验前，先做检索抽样和 100 题小样本生成。
 
-如果你只使用默认硅基流动方案，最小准备通常只需要：
+## 非目标
 
-```bash
-source .venv/bin/activate
-export SILICONFLOW_API_KEY=...
-python -m src.main --config configs/base.yaml show-config
-python scripts/run_full_experiment.py --config configs/base.yaml
-```
-
-验收条件：
-
-- 三段脚本共享同一个 `experiment_id`
-- 所有结果统一落在 `results/runs/<experiment_id>/`
-
-## 论文实验说明
-
-### 为什么同时设置 Non-RAG 和 RAG
-
-这是为了构建清晰对照组。`baseline` 表示模型只依赖参数知识回答；`rag` 表示模型显式依赖外部教学资料回答。两者对比可以直接支撑“RAG 是否降低幻觉”这一研究问题。
-
-### 为什么 baseline 评测时可以有参考 contexts
-
-评测需要事实参照物。为避免把生成阶段上下文和评测阶段上下文混淆，系统单独使用 `evaluation_contexts` 字段。它只在 evaluation 层注入，不会回流到 baseline 生成链。
-
-### 指标含义
-
-- `faithfulness`：答案是否忠实于参考上下文
-- `answer_relevance`：答案是否真正回应问题
-- `context_precision`：检索上下文是否足够聚焦
-- `context_recall`：检索上下文是否覆盖应有信息
-
-## 已实现模块
-
-- 配置与唯一契约源
-- Markdown 资料加载、清洗、切块、FAISS 建库
-- baseline / rag 两条生成链
-- Ragas 评测、汇总统计、分析报告
-
-## 暂未实现
-
-- PDF/TXT/DOCX/PPTX 原生解析
-- 多 provider 抽象
-- 人工标注工作流
-- Notebook 调试文件
+- 不做在线服务或前端
+- 不提交大体积教材原文、索引和实验结果
+- 不把 pseudo-corpus 当正式检索语料

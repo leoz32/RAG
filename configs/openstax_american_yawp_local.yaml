@@ -1,0 +1,42 @@
+project_name: rag_hallucination_eval
+random_seed: 42
+prompt_version: openstax_american_yawp_local_v1
+
+llm:
+  provider: openai_compatible
+  model_name: deepseek-chat
+  temperature: 0.0
+  max_tokens: 800
+  api_key_env: DEEPSEEK_API_KEY
+  base_url: https://api.deepseek.com
+
+embedding:
+  provider: local_hash
+  model_name: local-hash-256
+  dimension: 256
+
+chunking:
+  chunk_size: 700
+  chunk_overlap: 120
+
+evaluation:
+  llm_max_tokens: 4096
+
+retrieval:
+  top_k: 4
+
+dataset:
+  course_name: openstax_american_yawp
+  dataset_version: hf_ambrosfitz_openstax_american_yawp_v1
+  qa_dataset_path: data/eval/openstax_american_yawp_qa_dataset.csv
+  raw_glob: "**/*.md"
+
+paths:
+  raw_dir: data/raw/openstax_american_yawp
+  processed_dir: data/processed
+  eval_dir: data/eval
+  vector_store_dir: data/vector_store
+  results_dir: results
+  runs_dir: results/runs
+  reports_dir: results/reports
+  figures_dir: results/figures

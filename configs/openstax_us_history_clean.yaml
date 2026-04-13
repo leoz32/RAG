@@ -1,0 +1,49 @@
+project_name: rag_hallucination_eval
+random_seed: 42
+prompt_version: openstax_us_history_clean_v1
+
+llm:
+  provider: openai_compatible
+  model_name: deepseek-chat
+  temperature: 0.0
+  max_tokens: 800
+  api_key_env: DEEPSEEK_API_KEY
+  base_url: https://api.deepseek.com
+
+embedding:
+  provider: openai_compatible
+  model_name: BAAI/bge-m3
+  api_key_env: SILICONFLOW_API_KEY
+  base_url: https://api.siliconflow.cn/v1
+  max_input_tokens: 8192
+  request_batch_size: 1
+
+chunking:
+  strategy: sentence_window
+  chunk_size: 700
+  chunk_overlap: 120
+  target_sentences_per_chunk: 5
+  sentence_overlap: 2
+  max_words_per_chunk: 220
+
+evaluation:
+  llm_max_tokens: 4096
+
+retrieval:
+  top_k: 4
+
+dataset:
+  course_name: openstax_us_history_clean
+  dataset_version: openstax_us_history_clean_v1
+  qa_dataset_path: data/eval/openstax_american_yawp_qa_dataset.csv
+  raw_glob: "*.md"
+
+paths:
+  raw_dir: data/raw/openstax_us_history_clean_v1
+  processed_dir: data/processed
+  eval_dir: data/eval
+  vector_store_dir: data/vector_store
+  results_dir: results
+  runs_dir: results/runs
+  reports_dir: results/reports
+  figures_dir: results/figures

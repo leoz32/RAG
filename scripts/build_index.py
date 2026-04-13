@@ -24,7 +24,7 @@ def run_build_index(settings: AppSettings) -> None:
     chunks = split_documents(cleaned_documents, settings)
     write_jsonl(settings.chunks_path, chunks)
     logger.info("Saved %s chunks to %s", len(chunks), settings.chunks_path)
-    build_faiss_index(chunks, settings)
+    build_faiss_index(chunks, settings, logger=logger)
     logger.info("Saved FAISS index to %s", settings.faiss_index_dir)
 
 

@@ -59,6 +59,9 @@ class EmbeddingClient:
             model=settings.embedding.model_name,
             api_key=settings.embedding.api_key,
             base_url=settings.embedding.base_url,
+            check_embedding_ctx_length=settings.embedding.max_input_tokens is not None,
+            embedding_ctx_length=settings.embedding.max_input_tokens,
+            chunk_size=settings.embedding.request_batch_size,
         )
 
     @property

@@ -21,7 +21,7 @@ from src.utils.logger import get_logger
 def run_evaluation(settings: AppSettings) -> None:
     logger = get_logger("run_evaluation", settings.log_file)
     eval_df = build_evaluation_dataframe(settings)
-    question_level_df = run_ragas(eval_df, settings)
+    question_level_df = run_ragas(eval_df, settings, logger=logger)
     write_csv(settings.question_level_results_path, question_level_df)
     logger.info("Saved question-level results to %s", settings.question_level_results_path)
 

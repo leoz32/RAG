@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import random
+import re
 from pathlib import Path
 
 try:
@@ -43,11 +44,17 @@ class EmbeddingSettings(BaseModel):
     api_key: str | None = None
     base_url: str | None = None
     dimension: int = 256
+    max_input_tokens: int | None = None
+    request_batch_size: int = 32
 
 
 class ChunkingSettings(BaseModel):
+    strategy: str = "sentence_window"
     chunk_size: int = 700
     chunk_overlap: int = 120
+    target_sentences_per_chunk: int = 5
+    sentence_overlap: int = 2
+    max_words_per_chunk: int = 220
 
 
 class EvaluationSettings(BaseModel):
@@ -55,7 +62,11 @@ class EvaluationSettings(BaseModel):
 
 
 class RetrievalSettings(BaseModel):
+    strategy: str = "hybrid_rrf"
     top_k: int = 4
+    dense_top_k: int = 5
+    bm25_top_k: int = 5
+    rrf_k: int = 60
 
 
 class DatasetSettings(BaseModel):
@@ -85,6 +96,10 @@ class AppSettings(BaseModel):
     def validate_overlap(self) -> "AppSettings":
         if self.chunking.chunk_overlap >= self.chunking.chunk_size:
             raise ValueError("chunk_overlap must be smaller than chunk_size")
+        if self.chunking.target_sentences_per_chunk <= 0:
+            raise ValueError("target_sentences_per_chunk must be greater than 0")
+        if self.chunking.sentence_overlap >= self.chunking.target_sentences_per_chunk:
+            raise ValueError("sentence_overlap must be smaller than target_sentences_per_chunk")
         return self
 
     @property
@@ -96,12 +111,26 @@ class AppSettings(BaseModel):
         return self.project_root / self.paths.processed_dir
 
     @property
+    def dataset_slug(self) -> str:
+        raw = f"{self.dataset.course_name}_{self.dataset.dataset_version}"
+        slug = re.sub(r"[^a-zA-Z0-9._-]+", "_", raw).strip("._-")
+        return slug or "default_dataset"
+
+    @property
+    def dataset_processed_dir(self) -> Path:
+        return self.processed_dir / self.dataset_slug
+
+    @property
     def eval_dir(self) -> Path:
         return self.project_root / self.paths.eval_dir
 
     @property
     def vector_store_dir(self) -> Path:
         return self.project_root / self.paths.vector_store_dir
+
+    @property
+    def dataset_vector_store_dir(self) -> Path:
+        return self.vector_store_dir / self.dataset_slug
 
     @property
     def runs_dir(self) -> Path:
@@ -121,11 +150,11 @@ class AppSettings(BaseModel):
 
     @property
     def chunks_path(self) -> Path:
-        return self.processed_dir / "chunks.jsonl"
+        return self.dataset_processed_dir / "chunks.jsonl"
 
     @property
     def faiss_index_dir(self) -> Path:
-        return self.vector_store_dir / "faiss_index"
+        return self.dataset_vector_store_dir / "faiss_index"
 
     @property
     def qa_dataset_path(self) -> Path:
@@ -134,6 +163,18 @@ class AppSettings(BaseModel):
     @property
     def generation_results_path(self) -> Path:
         return self.run_dir / "generation_results.csv"
+
+    @property
+    def embedding_cache_path(self) -> Path:
+        return self.dataset_vector_store_dir / "embedding_cache.jsonl"
+
+    @property
+    def embedding_cache_meta_path(self) -> Path:
+        return self.dataset_vector_store_dir / "embedding_cache_meta.json"
+
+    @property
+    def index_build_state_path(self) -> Path:
+        return self.dataset_vector_store_dir / "index_meta.json"
 
     @property
     def baseline_eval_results_path(self) -> Path:
@@ -173,11 +214,15 @@ class AppSettings(BaseModel):
         payload["resolved_paths"] = {
             "raw_dir": str(self.raw_dir),
             "processed_dir": str(self.processed_dir),
+            "dataset_processed_dir": str(self.dataset_processed_dir),
             "eval_dir": str(self.eval_dir),
             "vector_store_dir": str(self.vector_store_dir),
+            "dataset_vector_store_dir": str(self.dataset_vector_store_dir),
             "runs_dir": str(self.runs_dir),
             "run_dir": str(self.run_dir),
             "qa_dataset_path": str(self.qa_dataset_path),
+            "chunks_path": str(self.chunks_path),
+            "faiss_index_dir": str(self.faiss_index_dir),
         }
         return payload
 
@@ -198,8 +243,10 @@ def _prepare_directories(settings: AppSettings) -> None:
     for directory in (
         settings.raw_dir,
         settings.processed_dir,
+        settings.dataset_processed_dir,
         settings.eval_dir,
         settings.vector_store_dir,
+        settings.dataset_vector_store_dir,
         settings.runs_dir,
         settings.run_dir,
     ):
