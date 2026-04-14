@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+from threading import local
 
 import pandas as pd
 from tqdm import tqdm
@@ -36,6 +38,23 @@ def _append_generation_result(settings: AppSettings, payload: dict) -> None:
     append_records_csv(settings.generation_results_path, [payload])
 
 
+def _build_worker_state(settings: AppSettings):
+    thread_state = local()
+
+    def get_state():
+        if not hasattr(thread_state, "baseline_chain"):
+            llm_client = LLMClient(settings)
+            thread_state.baseline_chain = BaselineChain(settings, llm_client=llm_client)
+            thread_state.rag_chain = RagChain(
+                settings,
+                retriever=Retriever(settings),
+                llm_client=llm_client,
+            )
+        return thread_state
+
+    return get_state
+
+
 def run_generation(settings: AppSettings, limit: int | None = None) -> pd.DataFrame:
     logger = get_logger("run_generation", settings.log_file)
     questions = _load_questions(settings, limit=limit)
@@ -52,23 +71,71 @@ def run_generation(settings: AppSettings, limit: int | None = None) -> pd.DataFr
     if completed_keys:
         logger.info("Resuming generation with %s completed records already on disk", len(completed_keys))
 
-    llm_client = LLMClient(settings)
-    baseline_chain = BaselineChain(settings, llm_client=llm_client)
-    rag_chain = RagChain(settings, retriever=Retriever(settings), llm_client=llm_client)
+    pending_questions = [
+        question
+        for question in questions
+        if (question.question_id, "baseline") not in completed_keys
+        or (question.question_id, "rag") not in completed_keys
+    ]
+    logger.info(
+        "Pending generation questions: %s of %s total (concurrency=%s)",
+        len(pending_questions),
+        len(questions),
+        settings.generation.concurrency,
+    )
 
-    for question in tqdm(questions, desc="Generating answers"):
-        baseline_key = (question.question_id, "baseline")
-        rag_key = (question.question_id, "rag")
+    if settings.generation.concurrency <= 1:
+        llm_client = LLMClient(settings)
+        baseline_chain = BaselineChain(settings, llm_client=llm_client)
+        rag_chain = RagChain(settings, retriever=Retriever(settings), llm_client=llm_client)
 
-        if baseline_key not in completed_keys:
-            baseline_payload = baseline_chain.run(question).model_dump(mode="json")
-            _append_generation_result(settings, baseline_payload)
-            completed_keys.add(baseline_key)
+        for question in tqdm(pending_questions, desc="Generating answers", unit="question"):
+            baseline_key = (question.question_id, "baseline")
+            rag_key = (question.question_id, "rag")
 
-        if rag_key not in completed_keys:
-            rag_payload = rag_chain.run(question).model_dump(mode="json")
-            _append_generation_result(settings, rag_payload)
-            completed_keys.add(rag_key)
+            if baseline_key not in completed_keys:
+                baseline_payload = baseline_chain.run(question).model_dump(mode="json")
+                _append_generation_result(settings, baseline_payload)
+                completed_keys.add(baseline_key)
+
+            if rag_key not in completed_keys:
+                rag_payload = rag_chain.run(question).model_dump(mode="json")
+                _append_generation_result(settings, rag_payload)
+                completed_keys.add(rag_key)
+    else:
+        get_worker_state = _build_worker_state(settings)
+
+        def process_question(question: QuestionRecord) -> tuple[str, list[dict]]:
+            worker = get_worker_state()
+            payloads: list[dict] = []
+            baseline_key = (question.question_id, "baseline")
+            rag_key = (question.question_id, "rag")
+
+            if baseline_key not in completed_keys:
+                payloads.append(worker.baseline_chain.run(question).model_dump(mode="json"))
+            if rag_key not in completed_keys:
+                payloads.append(worker.rag_chain.run(question).model_dump(mode="json"))
+            return question.question_id, payloads
+
+        with ThreadPoolExecutor(max_workers=settings.generation.concurrency) as executor:
+            future_map = {executor.submit(process_question, question): question for question in pending_questions}
+            progress = tqdm(total=len(future_map), desc="Generating answers", unit="question")
+            for index, future in enumerate(as_completed(future_map), start=1):
+                question = future_map[future]
+                question_id, payloads = future.result()
+                for payload in payloads:
+                    _append_generation_result(settings, payload)
+                    completed_keys.add((payload["question_id"], payload["pipeline_type"]))
+                progress.update(1)
+                progress.set_postfix_str(question_id, refresh=False)
+                if index % 10 == 0 or index == len(future_map):
+                    logger.info(
+                        "Generation progress: %s/%s questions completed (latest: %s)",
+                        index,
+                        len(future_map),
+                        question.question_id,
+                    )
+            progress.close()
 
     results_df = finalize_csv(
         settings.generation_results_path,

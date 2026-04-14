@@ -2,6 +2,7 @@
 .venv/
 __pycache__/
 *.pyc
+.tmp_*
 results/runs/
 data/processed/
 data/vector_store/

@@ -26,8 +26,12 @@ chunking:
   sentence_overlap: 2
   max_words_per_chunk: 220
 
+generation:
+  concurrency: 4
+
 evaluation:
   llm_max_tokens: 4096
+  concurrency: 1
 
 retrieval:
   strategy: hybrid_rrf

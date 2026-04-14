@@ -59,6 +59,7 @@ class ChunkingSettings(BaseModel):
 
 class EvaluationSettings(BaseModel):
     llm_max_tokens: int = 4096
+    concurrency: int = 1
 
 
 class RetrievalSettings(BaseModel):
@@ -67,6 +68,10 @@ class RetrievalSettings(BaseModel):
     dense_top_k: int = 5
     bm25_top_k: int = 5
     rrf_k: int = 60
+
+
+class GenerationSettings(BaseModel):
+    concurrency: int = 1
 
 
 class DatasetSettings(BaseModel):
@@ -87,6 +92,7 @@ class AppSettings(BaseModel):
     llm: LLMSettings
     embedding: EmbeddingSettings
     chunking: ChunkingSettings
+    generation: GenerationSettings = Field(default_factory=GenerationSettings)
     evaluation: EvaluationSettings = Field(default_factory=EvaluationSettings)
     retrieval: RetrievalSettings
     dataset: DatasetSettings
