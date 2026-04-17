@@ -1,6 +1,6 @@
 project_name: rag_hallucination_eval
 random_seed: 42
-prompt_version: openstax_us_history_clean_openstax_only_v1
+prompt_version: openstax_us_history_clean_openstax_only_v2_relaxed_unknown
 
 llm:
   provider: openai_compatible
