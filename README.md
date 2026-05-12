@@ -173,3 +173,145 @@
 - FActScore 人物简介事实生成配置：[configs/factscore_unlabeled_chatgpt_local.yaml](/home/leoz32/RAG/configs/factscore_unlabeled_chatgpt_local.yaml)
 
 如果后续需要扩展到新的课程语料、新的嵌入模型或新的评测组合，通常只需在 `configs/` 中新增或修改配置文件，而不必改动整体框架结构。
+
+## 4. 实验启动
+
+本节给出项目的基本启动流程，包括环境配置、数据准备、生成与评测命令，便于复现实验。
+
+### 4.1 环境配置
+
+建议使用独立虚拟环境安装依赖：
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+```
+
+项目中常用的环境变量如下：
+
+```bash
+DEEPSEEK_API_KEY=...
+SILICONFLOW_API_KEY=...
+OPENAI_API_KEY=...
+```
+
+其中：
+
+- `DEEPSEEK_API_KEY`：用于生成阶段和部分评测阶段的大模型调用；
+- `SILICONFLOW_API_KEY`：用于嵌入模型调用；
+- `OPENAI_API_KEY`：在部分兼容流程或外部依赖中可能需要保留。
+
+### 4.2 数据集准备
+
+#### 4.2.1 OpenStax 问答实验
+
+若需从上游 Hugging Face 数据集适配本地 QA 文件，可运行：
+
+```bash
+python scripts/datasets/openstax_american_yawp/prepare_dataset.py
+```
+
+若需将混合题集按来源拆分，可运行：
+
+```bash
+python scripts/split_qa_dataset_by_source_doc.py \
+  --input data/eval/openstax_american_yawp_qa_dataset.csv \
+  --output-dir data/eval/split_by_source_doc
+```
+
+若需抓取并清洗 OpenStax 教材原文，可运行：
+
+```bash
+python scripts/fetch_openstax_us_history.py \
+  --i-have-permission \
+  --out-dir data/raw/openstax_us_history_original_v3
+```
+
+```bash
+python scripts/clean_openstax_us_history.py \
+  --input-dir data/raw/openstax_us_history_original_v3 \
+  --output-dir data/raw/openstax_us_history_clean_v1
+```
+
+正式实验也可直接使用本地整理后的配置：
+
+- [configs/openstax_dataset_export_cleaned_20260422.yaml](/home/leoz32/RAG/configs/openstax_dataset_export_cleaned_20260422.yaml)
+
+#### 4.2.2 FActScore 实验
+
+FActScore 相关源码已集成在仓库内。若需导入或整理本地数据，可运行：
+
+```bash
+python scripts/import_factscore_dataset.py
+```
+
+对应配置文件为：
+
+- [configs/factscore_unlabeled_chatgpt_local.yaml](/home/leoz32/RAG/configs/factscore_unlabeled_chatgpt_local.yaml)
+
+### 4.3 建立索引
+
+在 OpenStax 主线实验中，首先需要对教材语料建立索引：
+
+```bash
+python scripts/build_index.py \
+  --config configs/openstax_dataset_export_cleaned_20260422.yaml \
+  --experiment-id openstax_run
+```
+
+### 4.4 运行生成
+
+小样本试运行：
+
+```bash
+python scripts/run_generation.py \
+  --config configs/openstax_dataset_export_cleaned_20260422.yaml \
+  --experiment-id openstax_run \
+  --limit 100
+```
+
+全量生成：
+
+```bash
+python scripts/run_generation.py \
+  --config configs/openstax_dataset_export_cleaned_20260422.yaml \
+  --experiment-id openstax_run
+```
+
+若运行 FActScore 主线实验，可将配置替换为：
+
+```bash
+python scripts/run_generation.py \
+  --config configs/factscore_unlabeled_chatgpt_local.yaml \
+  --experiment-id factscore_run
+```
+
+### 4.5 运行评测
+
+OpenStax 主线评测：
+
+```bash
+python scripts/run_evaluation.py \
+  --config configs/openstax_dataset_export_cleaned_20260422.yaml \
+  --experiment-id openstax_run
+```
+
+FActScore 主线评测：
+
+```bash
+python scripts/run_evaluation.py \
+  --config configs/factscore_unlabeled_chatgpt_local.yaml \
+  --experiment-id factscore_run
+```
+
+### 4.6 一键运行完整流程
+
+如果希望串联完整实验流程，可运行：
+
+```bash
+python scripts/run_full_experiment.py \
+  --config configs/openstax_dataset_export_cleaned_20260422.yaml \
+  --experiment-id openstax_run
+```
