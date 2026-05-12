@@ -1,4 +1,4 @@
-# Rag_Hallucination_eval
+# Rag Hallucination Eval
 
 面向高教教学问答场景的研究型 RAG 幻觉评估平台。用于比较 `Non-RAG baseline` 与 `RAG` 两条生成链在同一批教学问题上的幻觉差异。
 
