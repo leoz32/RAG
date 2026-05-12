@@ -1,0 +1,70 @@
+project_name: rag_hallucination_eval
+random_seed: 42
+prompt_version: openstax_dataset_export_cleaned_20260422_v1
+
+llm:
+  provider: openai_compatible
+  model_name: deepseek-chat
+  temperature: 0.0
+  max_tokens: 800
+  api_key_env: DEEPSEEK_API_KEY
+  base_url: https://api.deepseek.com
+
+embedding:
+  provider: openai_compatible
+  model_name: BAAI/bge-m3
+  api_key_env: SILICONFLOW_API_KEY
+  base_url: https://api.siliconflow.cn/v1
+  max_input_tokens: 8192
+  request_batch_size: 1
+
+chunking:
+  strategy: sentence_window
+  chunk_size: 700
+  chunk_overlap: 120
+  target_sentences_per_chunk: 5
+  sentence_overlap: 2
+  max_words_per_chunk: 220
+
+generation:
+  concurrency: 4
+
+evaluation:
+  llm_max_tokens: 4096
+  concurrency: 1
+  factscore_concurrency: 4
+  factscore_enabled: true
+  factscore_model_name: retrieval+ChatGPT
+  factscore_gamma: 10
+  factscore_openai_key_env: DEEPSEEK_API_KEY
+  factscore_api_base: https://api.deepseek.com/v1
+  factscore_chat_model_name: deepseek-chat
+  factscore_instruct_model_name: deepseek-chat
+  factscore_knowledge_source_name: openstax_eval_knowledge_source
+  factscore_project_topic_name: openstax_dataset_export_cleaned_corpus
+  factscore_source_path: FActScore
+  factscore_retrieval_type: bm25
+
+retrieval:
+  strategy: hybrid_rrf
+  top_k: 5
+  dense_top_k: 5
+  bm25_top_k: 8
+  rrf_k: 30
+
+dataset:
+  kind: qa_csv
+  course_name: openstax_dataset_export_cleaned
+  dataset_version: 20260422_v1
+  qa_dataset_path: data/raw/openstax_dataset_export_cleaned_20260422/qa_dataset/openstax_qa_dataset.csv
+  raw_glob: "*.md"
+
+paths:
+  raw_dir: data/raw/openstax_dataset_export_cleaned_20260422/textbook_corpus_cleaned
+  processed_dir: data/processed
+  eval_dir: data/eval
+  vector_store_dir: data/vector_store
+  results_dir: results
+  runs_dir: results/runs
+  reports_dir: results/reports
+  figures_dir: results/figures

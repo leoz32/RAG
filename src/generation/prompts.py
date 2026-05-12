@@ -1,6 +1,20 @@
+def _build_answer_policy(*, allow_external_knowledge: bool) -> str:
+    if allow_external_knowledge:
+        return (
+            "请直接回答问题，保持学术表达清晰、简洁、规范。\n"
+            "如果你对答案没有足够把握，请明确说明不确定，不要把猜测写成确定事实。\n"
+        )
+    return (
+        "请严格依据给定教学资料回答问题，不要编造，不要补充资料外信息，不要使用你自身常识替代资料内容。\n"
+        "如果资料只能支持部分答案，请先回答资料能够支持的部分，再明确指出哪些部分无法从资料确认。\n"
+        "如果资料不足以支持完整答案，请明确说明不确定，不要把推测写成确定事实。\n"
+    )
+
+
 def build_non_rag_prompt(question: str) -> str:
     return (
-        "你是一个高等教育教学助手，请直接回答用户问题，保持学术表达清晰、简洁、规范。\n\n"
+        "你是一个高等教育教学助手。\n"
+        f"{_build_answer_policy(allow_external_knowledge=True)}\n"
         f"问题：{question}\n\n"
         "回答："
     )
@@ -9,9 +23,8 @@ def build_non_rag_prompt(question: str) -> str:
 def build_rag_prompt(question: str, contexts: str) -> str:
     return (
         "你是一个高等教育教学助手。\n"
-        "请严格依据给定教学资料回答问题，不要编造，不要补充资料外信息，不要使用你自身常识替代资料内容。\n"
+        f"{_build_answer_policy(allow_external_knowledge=False)}"
         "请先直接回答问题，再用1至2句说明依据或不确定之处，不要先写铺垫，也不要大段复述背景。\n"
-        "如果资料只能支持部分答案，请先回答资料能够支持的部分，再明确指出哪些部分无法从资料确认。\n"
         "除非全部教学资料都与问题无关，否则不要只回答“未知”或“资料未提及”。\n\n"
         f"教学资料：\n{contexts}\n\n"
         f"问题：{question}\n\n"

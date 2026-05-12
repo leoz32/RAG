@@ -25,6 +25,8 @@ class RagChain:
         retrievals = self.retriever.retrieve(question.question, question.question_id)
         contexts = [record.text for record in retrievals]
         context_ids = [record.chunk_id for record in retrievals]
+        context_source_files = [record.source_file for record in retrievals]
+        context_scores = [float(record.score) for record in retrievals]
         prompt = build_rag_prompt(question.question, "\n\n".join(contexts))
         answer = self.llm_client.generate(prompt)
         return GenerationRecord(
@@ -33,10 +35,17 @@ class RagChain:
             question=question.question,
             ground_truth=question.ground_truth,
             question_type=question.question_type,
+            topic=question.topic,
+            source_split=question.source_split,
+            source_model=question.source_model,
+            reference_output=question.reference_output,
             pipeline_type=PipelineType.RAG,
             answer=answer,
             contexts=contexts,
             context_ids=context_ids,
+            context_source_files=context_source_files,
+            context_scores=context_scores,
+            retrieved_context_count=len(retrievals),
             prompt=prompt,
             prompt_version=self.settings.prompt_version,
             llm_model_name=self.settings.llm.model_name,

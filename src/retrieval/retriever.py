@@ -52,6 +52,14 @@ TOKEN_RE = re.compile(r"[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*")
 YEAR_RE = re.compile(r"\b(?:1[0-9]{3}|20[0-9]{2})s?\b")
 TITLE_CASE_RE = re.compile(r"\b[A-Z][a-z]+(?:-[A-Z][a-z]+)?\b")
 ALL_CAPS_RE = re.compile(r"\b[A-Z]{2,}(?:-[A-Z]{2,})?\b")
+CJK_SPAN_RE = re.compile(r"[\u4e00-\u9fff]+")
+
+
+def _cjk_bigrams(text: str) -> list[str]:
+    compact = "".join(char for char in text if "\u4e00" <= char <= "\u9fff")
+    if len(compact) <= 1:
+        return [compact] if compact else []
+    return [compact[index : index + 2] for index in range(len(compact) - 1)]
 
 
 class Retriever:
@@ -136,6 +144,10 @@ class Retriever:
                 continue
             add(token)
 
+        for span in CJK_SPAN_RE.findall(question):
+            for token in _cjk_bigrams(span):
+                add(token)
+
         return keywords
 
     def _keyword_coverage_score(self, question: str, text: str) -> float:
@@ -153,6 +165,8 @@ class Retriever:
                 return 2.0
             if "-" in keyword:
                 return 2.5
+            if any("\u4e00" <= char <= "\u9fff" for char in keyword):
+                return 1.2
             if keyword[:1].isupper() or keyword.isupper():
                 return 1.5
             return 1.0

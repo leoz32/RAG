@@ -9,7 +9,7 @@ if str(ROOT) not in sys.path:
 
 from src.config.settings import AppSettings, load_settings
 from src.ingestion.cleaner import clean_text
-from src.ingestion.loaders import load_markdown_documents
+from src.ingestion.loaders import load_documents
 from src.ingestion.splitter import split_documents
 from src.ingestion.vector_store import build_faiss_index
 from src.utils.io import write_jsonl
@@ -18,8 +18,11 @@ from src.utils.logger import get_logger
 
 def run_build_index(settings: AppSettings) -> None:
     logger = get_logger("build_index", settings.log_file)
-    logger.info("Loading markdown documents from %s", settings.raw_dir)
-    documents = load_markdown_documents(settings)
+    if settings.dataset.kind == "factscore_jsonl":
+        logger.info("Loading dataset-matched reference documents from %s", settings.qa_dataset_path)
+    else:
+        logger.info("Loading markdown documents from %s", settings.raw_dir)
+    documents = load_documents(settings)
     cleaned_documents = [doc.model_copy(update={"text": clean_text(doc.text)}) for doc in documents]
     chunks = split_documents(cleaned_documents, settings)
     write_jsonl(settings.chunks_path, chunks)

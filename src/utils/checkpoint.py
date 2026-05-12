@@ -25,8 +25,28 @@ def append_records_csv(path: Path, records: Iterable[dict]) -> None:
 
     ensure_dir(path.parent)
     serialized_rows = [{key: _serialize_csv_value(value) for key, value in row.items()} for row in rows]
-    fieldnames = list(serialized_rows[0].keys())
     file_exists = path.exists() and path.stat().st_size > 0
+
+    fieldnames: list[str] = []
+    for row in serialized_rows:
+        for key in row:
+            if key not in fieldnames:
+                fieldnames.append(key)
+    if file_exists:
+        with path.open("r", encoding="utf-8", newline="") as handle:
+            reader = csv.reader(handle)
+            existing_fieldnames = next(reader, [])
+        new_fieldnames = fieldnames
+        missing_fieldnames = [name for name in new_fieldnames if name not in existing_fieldnames]
+        if missing_fieldnames:
+            existing_df = read_csv(path)
+            for name in missing_fieldnames:
+                existing_df[name] = ""
+            existing_df = existing_df[[*existing_fieldnames, *missing_fieldnames]]
+            existing_df.to_csv(path, index=False)
+            fieldnames = [*existing_fieldnames, *missing_fieldnames]
+        else:
+            fieldnames = existing_fieldnames
 
     with path.open("a", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)

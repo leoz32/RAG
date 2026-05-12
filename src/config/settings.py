@@ -60,6 +60,25 @@ class ChunkingSettings(BaseModel):
 class EvaluationSettings(BaseModel):
     llm_max_tokens: int = 4096
     concurrency: int = 1
+    factscore_concurrency: int = 1
+    reference_context_strategy: str = "retrieve_once_per_question"
+    manual_review_top_n: int = 25
+    llm_model_name: str | None = None
+    api_key_env: str | None = None
+    api_key: str | None = None
+    base_url: str | None = None
+    factscore_enabled: bool = False
+    factscore_model_name: str = "retrieval+ChatGPT"
+    factscore_gamma: int = 10
+    factscore_openai_key_env: str = "OPENAI_API_KEY"
+    factscore_openai_key: str | None = None
+    factscore_api_base: str | None = None
+    factscore_chat_model_name: str = "gpt-3.5-turbo"
+    factscore_instruct_model_name: str = "gpt-3.5-turbo"
+    factscore_knowledge_source_name: str = "rag_eval_knowledge_source"
+    factscore_project_topic_name: str = "rag_eval_project_corpus"
+    factscore_source_path: str = "FActScore"
+    factscore_retrieval_type: str = "bm25"
 
 
 class RetrievalSettings(BaseModel):
@@ -75,10 +94,15 @@ class GenerationSettings(BaseModel):
 
 
 class DatasetSettings(BaseModel):
+    kind: str = "qa_csv"
     course_name: str
     dataset_version: str
     qa_dataset_path: str = "data/eval/qa_dataset.csv"
+    sample_limit: int | None = None
     raw_glob: str = "*.md"
+    exclude_globs: list[str] = Field(default_factory=list)
+    factscore_split: str | None = None
+    factscore_models: list[str] = Field(default_factory=list)
 
 
 class AppSettings(BaseModel):
@@ -106,6 +130,23 @@ class AppSettings(BaseModel):
             raise ValueError("target_sentences_per_chunk must be greater than 0")
         if self.chunking.sentence_overlap >= self.chunking.target_sentences_per_chunk:
             raise ValueError("sentence_overlap must be smaller than target_sentences_per_chunk")
+        valid_reference_context_strategies = {"retrieve_once_per_question", "rag_generation_contexts"}
+        if self.evaluation.reference_context_strategy not in valid_reference_context_strategies:
+            raise ValueError(
+                "evaluation.reference_context_strategy must be one of "
+                f"{sorted(valid_reference_context_strategies)}"
+            )
+        if self.evaluation.manual_review_top_n <= 0:
+            raise ValueError("evaluation.manual_review_top_n must be greater than 0")
+        if self.evaluation.factscore_concurrency <= 0:
+            raise ValueError("evaluation.factscore_concurrency must be greater than 0")
+        if self.evaluation.factscore_gamma < 0:
+            raise ValueError("evaluation.factscore_gamma must be greater than or equal to 0")
+        valid_dataset_kinds = {"qa_csv", "factscore_jsonl"}
+        if self.dataset.kind not in valid_dataset_kinds:
+            raise ValueError(f"dataset.kind must be one of {sorted(valid_dataset_kinds)}")
+        if self.dataset.sample_limit is not None and self.dataset.sample_limit <= 0:
+            raise ValueError("dataset.sample_limit must be greater than 0 when provided")
         return self
 
     @property
@@ -167,6 +208,18 @@ class AppSettings(BaseModel):
         return self.project_root / self.dataset.qa_dataset_path
 
     @property
+    def factscore_source_dir(self) -> Path:
+        return self.project_root / self.evaluation.factscore_source_path
+
+    @property
+    def imported_factscore_dir(self) -> Path:
+        return self.eval_dir / "factscore"
+
+    @property
+    def factscore_manifest_path(self) -> Path:
+        return self.imported_factscore_dir / "dataset_manifest.json"
+
+    @property
     def generation_results_path(self) -> Path:
         return self.run_dir / "generation_results.csv"
 
@@ -195,6 +248,26 @@ class AppSettings(BaseModel):
         return self.run_dir / "question_level_results.csv"
 
     @property
+    def factscore_results_path(self) -> Path:
+        return self.run_dir / "factscore_results.csv"
+
+    @property
+    def factscore_summary_json_path(self) -> Path:
+        return self.run_dir / "factscore_summary.json"
+
+    @property
+    def factscore_knowledge_source_path(self) -> Path:
+        return self.run_dir / "factscore_knowledge_source.jsonl"
+
+    @property
+    def factscore_db_path(self) -> Path:
+        return self.run_dir / "factscore_knowledge_source.db"
+
+    @property
+    def factscore_openai_key_path(self) -> Path:
+        return self.run_dir / "factscore_openai_api.key"
+
+    @property
     def metrics_summary_json_path(self) -> Path:
         return self.run_dir / "metrics_summary.json"
 
@@ -209,6 +282,18 @@ class AppSettings(BaseModel):
     @property
     def question_type_summary_csv_path(self) -> Path:
         return self.run_dir / "question_type_summary.csv"
+
+    @property
+    def pairwise_summary_json_path(self) -> Path:
+        return self.run_dir / "pairwise_summary.json"
+
+    @property
+    def pairwise_summary_csv_path(self) -> Path:
+        return self.run_dir / "pairwise_summary.csv"
+
+    @property
+    def manual_review_queue_path(self) -> Path:
+        return self.run_dir / "manual_review_queue.csv"
 
     @property
     def analysis_report_path(self) -> Path:
@@ -229,6 +314,7 @@ class AppSettings(BaseModel):
             "qa_dataset_path": str(self.qa_dataset_path),
             "chunks_path": str(self.chunks_path),
             "faiss_index_dir": str(self.faiss_index_dir),
+            "factscore_source_dir": str(self.factscore_source_dir),
         }
         return payload
 
@@ -236,12 +322,19 @@ class AppSettings(BaseModel):
 def _resolve_api_keys(config: dict) -> dict:
     llm = config.get("llm", {})
     embedding = config.get("embedding", {})
+    evaluation = config.get("evaluation", {})
     llm_env = llm.get("api_key_env", "OPENAI_API_KEY")
     emb_env = embedding.get("api_key_env", "OPENAI_API_KEY")
     llm["api_key"] = os.getenv(llm_env, llm.get("api_key"))
     embedding["api_key"] = os.getenv(emb_env, embedding.get("api_key"))
+    evaluation_env = evaluation.get("api_key_env")
+    if evaluation_env:
+        evaluation["api_key"] = os.getenv(evaluation_env, evaluation.get("api_key"))
+    factscore_env = evaluation.get("factscore_openai_key_env", "OPENAI_API_KEY")
+    evaluation["factscore_openai_key"] = os.getenv(factscore_env, evaluation.get("factscore_openai_key"))
     config["llm"] = llm
     config["embedding"] = embedding
+    config["evaluation"] = evaluation
     return config
 
 

@@ -34,6 +34,7 @@ def _expected_index_meta(settings: AppSettings) -> dict:
         "embedding_model_name": settings.embedding.model_name,
         "embedding_dimension": settings.embedding.dimension,
         "raw_glob": settings.dataset.raw_glob,
+        "exclude_globs": settings.dataset.exclude_globs,
         "chunk_size": settings.chunking.chunk_size,
         "chunk_overlap": settings.chunking.chunk_overlap,
         "chunking_strategy": settings.chunking.strategy,

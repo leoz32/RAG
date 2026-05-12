@@ -1,6 +1,6 @@
 project_name: rag_hallucination_eval
 random_seed: 42
-prompt_version: deepseek_local_v1
+prompt_version: factscore_unlabeled_chatgpt_100_v1
 
 llm:
   provider: openai_compatible
@@ -21,14 +21,25 @@ chunking:
 
 evaluation:
   llm_max_tokens: 4096
+  factscore_enabled: true
+  factscore_model_name: retrieval+ChatGPT
+  factscore_gamma: 10
+  factscore_openai_key_env: DEEPSEEK_API_KEY
+  factscore_api_base: https://api.deepseek.com/v1
+  factscore_chat_model_name: deepseek-chat
+  factscore_instruct_model_name: deepseek-chat
+  factscore_source_path: FActScore
+  factscore_retrieval_type: bm25
 
 retrieval:
   top_k: 4
 
 dataset:
-  course_name: example_course
+  kind: factscore_jsonl
+  course_name: factscore_unlabeled_chatgpt_100
   dataset_version: v1
-  qa_dataset_path: data/eval/qa_dataset.csv
+  qa_dataset_path: FActScore/data/unlabeled/ChatGPT.jsonl
+  sample_limit: 100
   raw_glob: "*.md"
   exclude_globs:
     - "DATASET_SOURCE_NOTE.md"
