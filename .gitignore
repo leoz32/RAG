@@ -3,10 +3,15 @@
 __pycache__/
 *.pyc
 .tmp_*
-results/runs/
+results/
 data/processed/
 data/vector_store/
 .DS_Store
+.claude/
+.agents/
+.codex
+论文/
+*.bak
 
 # Local experiment datasets and fetched textbook content.
 data/raw/openstax_american_yawp/
@@ -14,7 +19,13 @@ data/raw/openstax_us_history_clean_v1/
 data/raw/openstax_us_history_original/
 data/raw/openstax_us_history_original_v2/
 data/raw/openstax_us_history_original_v3/
+data/raw/openstax_dataset_export_cleaned_20260422/
 data/eval/openstax_american_yawp_qa_dataset.csv
 data/eval/openstax_american_yawp_qa_metadata.csv
 data/eval/openstax_american_yawp_mapping_summary.json
 data/eval/split_by_source_doc/
+data/eval/factscore/
+
+# Local FActScore caches and databases.
+FActScore/.cache/
+FActScore/enwiki-20230401.db
