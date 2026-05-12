@@ -6,15 +6,11 @@
 
 ## 当前主线
 
-当前推荐实验路径是：
-
 - 语料：`OpenStax U.S. History` 清洗后的 Markdown
 - 题集：只保留 `source_doc = OpenStax` 的 QA 子集
 - 检索：`bge-m3` + FAISS dense + BM25 + `hybrid_rrf`
 - 生成：`baseline` 与 `rag` 两条链并行输出
 - 评测：Ragas，支持断点续跑
-
-项目里仍保留早期的 `openstax_american_yawp` 适配器和纯 dense 路径，但它们不再是默认推荐方案。
 
 ## 目录
 
@@ -30,11 +26,6 @@ results/
 scripts/
 src/
 ```
-
-说明：
-
-- `data/raw/`、`data/eval/` 下的抓取教材和实验题集默认只在本地保留，不纳入版本控制。
-- `data/processed/`、`data/vector_store/`、`results/runs/` 都是运行产物，不提交。
 
 ## 安装
 
@@ -127,9 +118,7 @@ python scripts/build_index.py \
   --experiment-id exp_openstax_only_bgem3
 ```
 
-### 2. 小样本生成
-
-先跑 100 题，而不是直接跑全量：
+### 2. 小样本生成（100题）
 
 ```bash
 python scripts/run_generation.py \
